@@ -33,20 +33,6 @@ showInGrid xUpperLeft yUpperLeft columnCount columnWidth activeCellCoords cellsD
   let
     x0 = xUpperLeft
     y0 = yUpperLeft
-    topStr         = "┌" ++ (intercalate "┬" (replicate columnCount (replicate columnWidth '─'))) ++ "┐"
-    rowBoxStr      = "│" ++ (intercalate "│" (replicate columnCount (replicate columnWidth ' '))) ++ "│"
-    betweenRowsStr = "├" ++ (intercalate "┼" (replicate columnCount (replicate columnWidth '─'))) ++ "┤"
-    bottomStr      = "└" ++ (intercalate "┴" (replicate columnCount (replicate columnWidth '─'))) ++ "┘"
-    printRowBox rowIndex = do
-      if rowIndex == 0
-        then do
-          setCursorPosition (y0+1) x0
-          putStr rowBoxStr
-        else do
-          setCursorPosition (y0+rowIndex*2) x0
-          putStr betweenRowsStr
-          setCursorPosition (y0+rowIndex*2+1) x0
-          putStr rowBoxStr
     highlightCurrentColumn (activeCellX, activeCellY) = do
       let
         yPos = yUpperLeft
@@ -73,13 +59,36 @@ showInGrid xUpperLeft yUpperLeft columnCount columnWidth activeCellCoords cellsD
         setCursorPosition yPos (xUpperLeft + 1 + (columnWidth+1)*cellIndex)
         putStr cellValue
   saveCursor
-  clearScreen
-  setCursorPosition yUpperLeft xUpperLeft
-  putStr topStr
-  forM_ [0 .. (length cellsData) - 1] printRowBox
-  setCursorPosition (yUpperLeft+(length cellsData)*2) xUpperLeft
-  putStr bottomStr
+  drawGrid xUpperLeft yUpperLeft columnWidth columnCount (length cellsData)
   forM_ activeCellCoords highlightCurrentColumn
   forM_ (cellsData `zip` [0..]) $ \(row, rowIndex) -> do
     printRowValues row rowIndex
+  restoreCursor
+
+drawGrid :: Int -> Int -> Int -> Int -> Int -> IO ()
+drawGrid xUpperLeft yUpperLeft columnWidth columnCount rowCount = do
+  let
+    x0 = xUpperLeft
+    y0 = yUpperLeft
+    topStr         = "┌" ++ (intercalate "┬" (replicate columnCount (replicate columnWidth '─'))) ++ "┐"
+    rowBoxStr      = "│" ++ (intercalate "│" (replicate columnCount (replicate columnWidth ' '))) ++ "│"
+    betweenRowsStr = "├" ++ (intercalate "┼" (replicate columnCount (replicate columnWidth '─'))) ++ "┤"
+    bottomStr      = "└" ++ (intercalate "┴" (replicate columnCount (replicate columnWidth '─'))) ++ "┘"
+    printRowBox rowIndex = do
+      if rowIndex == 0
+        then do
+          setCursorPosition (y0+1) x0
+          putStr rowBoxStr
+        else do
+          setCursorPosition (y0+rowIndex*2) x0
+          putStr betweenRowsStr
+          setCursorPosition (y0+rowIndex*2+1) x0
+          putStr rowBoxStr
+  saveCursor
+  clearScreen
+  setCursorPosition yUpperLeft xUpperLeft
+  putStr topStr
+  forM_ [0 .. rowCount - 1] printRowBox
+  setCursorPosition (yUpperLeft+rowCount*2) xUpperLeft
+  putStr bottomStr
   restoreCursor
