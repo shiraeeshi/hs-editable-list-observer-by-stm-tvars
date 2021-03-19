@@ -4,6 +4,7 @@ import System.IO (stdin, hSetEcho, hSetBuffering, hReady, BufferMode (NoBufferin
 import ViewUtils (clearScreen, showInRectangle, showInGrid)
 import Control.Monad (when)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
+import Control.Concurrent.STM.TChan (newTChanIO, readTChan, writeTChan)
 import Control.Monad.STM (atomically, retry)
 import Control.Concurrent (forkIO)
 
@@ -31,16 +32,18 @@ main = do
     debugMessages <- newTVar ([] :: [RowData])
     highlightedRowIndex <- newTVar Nothing
     return $ AppState mainRows highlightedRowIndex debugMessages
+  redrawsTChan <- newTChanIO
   forkIO $ do
     let loop rows activeCellY = do
           let activeCellCoords = fmap (\y -> (0, y)) activeCellY
-          showInGrid
-            xUpperLeft
-            yUpperLeft
-            columnCount
-            columnWidth
-            activeCellCoords
-            (map (\row -> [smth row]) rows)
+          atomically
+            $ writeTChan redrawsTChan $ showInGrid
+                                          xUpperLeft
+                                          yUpperLeft
+                                          columnCount
+                                          columnWidth
+                                          activeCellCoords
+                                          (map (\row -> [smth row]) rows)
           (newMainRows, newActiveCellY) <- atomically $ do
             newMainRows <- readTVar mainRowsTV
             newActiveCellY <- readTVar highlightedRowIndexTV
@@ -55,13 +58,14 @@ main = do
     loop mainRows activeCellY
   forkIO $ do
     let loop debugMessages = do
-          showInGrid
-            xUpperLeft
-            (yUpperLeft+12)
-            columnCount
-            columnWidth
-            Nothing
-            (map (\row -> [smth row]) debugMessages)
+          atomically
+            $ writeTChan redrawsTChan $ showInGrid
+                                          xUpperLeft
+                                          (yUpperLeft+12)
+                                          columnCount
+                                          columnWidth
+                                          Nothing
+                                          (map (\row -> [smth row]) debugMessages)
           newDebugMessages <- atomically $ do
             newDebugMessages <- readTVar debugMessagesTV
             if newDebugMessages == debugMessages
@@ -72,13 +76,18 @@ main = do
     loop debugMessages
       
   clearScreen
-  keepListeningToKeyPresses mainRowsTV highlightedRowIndexTV debugMessagesTV
+  forkIO $ keepListeningToKeyPresses mainRowsTV highlightedRowIndexTV debugMessagesTV
+  loopRedraw redrawsTChan
   where
     xUpperLeft = 0
     yUpperLeft = 0
     columnCount = 1
     columnWidth = 14
     rowCount = length initialRows
+    loopRedraw redrawsTChan = do
+      redrawToPerform <- atomically $ readTChan redrawsTChan
+      redrawToPerform
+      loopRedraw redrawsTChan
     keepListeningToKeyPresses mainRowsTV highlightedRowIndexTV debugMessagesTV = do
       key <- getKey
       when (key /= "\ESC") $ do
