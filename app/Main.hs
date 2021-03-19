@@ -76,8 +76,8 @@ main = do
     loop debugMessages
       
   clearScreen
-  forkIO $ keepListeningToKeyPresses mainRowsTV highlightedRowIndexTV debugMessagesTV
-  loopRedraw redrawsTChan
+  forkIO $ loopRedraw redrawsTChan
+  keepListeningToKeyPresses mainRowsTV highlightedRowIndexTV debugMessagesTV
   where
     xUpperLeft = 0
     yUpperLeft = 0
