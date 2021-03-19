@@ -4,7 +4,7 @@ import System.IO (stdin, hSetEcho, hSetBuffering, hReady, BufferMode (NoBufferin
 import ViewUtils (clearScreen, showInRectangle, showInGrid)
 import Control.Monad (when)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
-import Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, takeTMVar, putTMVar)
+import Control.Concurrent.MVar (MVar, newEmptyMVar, takeMVar, putMVar)
 import Control.Monad.STM (STM, atomically, retry)
 import Control.Concurrent (forkIO)
 import Control.Exception (bracket)
@@ -24,20 +24,20 @@ data AppStateData = AppState
   , highlightedRowIndex :: TVar (Maybe Int)
   , debugMessages :: TVar [RowData] }
 
-newLock :: IO (TMVar ())
-newLock = newEmptyTMVarIO
+newLock :: IO (MVar ())
+newLock = newEmptyMVar
 
-lock :: TMVar () -> STM ()
-lock v = putTMVar v ()
+lock :: MVar () -> IO ()
+lock v = putMVar v ()
 
-unlock :: TMVar () -> STM ()
-unlock v = takeTMVar v
+unlock :: MVar () -> IO ()
+unlock v = takeMVar v
 
-bracketInLock :: TMVar () -> IO () -> IO ()
+bracketInLock :: MVar () -> IO () -> IO ()
 bracketInLock l action =
   bracket
-    (atomically $ lock l)
-    (\_ -> atomically $ unlock l)
+    (lock l)
+    (\_ -> unlock l)
     $ \_ -> action
 
 main :: IO ()
