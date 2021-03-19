@@ -1,6 +1,7 @@
 module ViewUtils
  ( showInRectangle
  , showInGrid
+ , clearScreen
  ) where
 
 import Control.Monad (forM_)
@@ -65,7 +66,6 @@ drawGrid xUpperLeft yUpperLeft columnWidth columnCount rowCount = do
           setCursorPosition (y0+rowIndex*2+1) x0
           putStr rowBoxStr
   saveCursor
-  clearScreen
   setCursorPosition yUpperLeft xUpperLeft
   putStr topStr
   forM_ [0 .. rowCount - 1] printRowBox

@@ -1,7 +1,7 @@
 module Main where
 
 import System.IO (stdin, hSetEcho, hSetBuffering, hReady, BufferMode (NoBuffering) )
-import ViewUtils (showInRectangle, showInGrid)
+import ViewUtils (clearScreen, showInRectangle, showInGrid)
 import Control.Monad (when)
 
 data RowData = Row { smth :: String }
@@ -18,14 +18,23 @@ main :: IO ()
 main = do
   hSetBuffering stdin NoBuffering
   hSetEcho stdin False
-  loop Nothing
+  loop Nothing []
   where
     xUpperLeft = 0
     yUpperLeft = 0
     columnCount = 1
     columnWidth = 14
-    loop :: Maybe (Int, Int) -> IO ()
-    loop activeCellCoords = do
+    rowCount = length initialRows
+    loop :: Maybe (Int, Int) -> [RowData] -> IO ()
+    loop activeCellCoords debugRows = do
+      clearScreen
+      showInGrid
+        (xUpperLeft+16)
+        yUpperLeft
+        columnCount
+        columnWidth
+        Nothing
+        (map (\row -> [smth row]) debugRows)
       showInGrid
         xUpperLeft
         yUpperLeft
@@ -39,15 +48,15 @@ main = do
           "\ESC[A" -> do -- up
             let newActiveCellCoords =
                   case activeCellCoords of
-                    Just (x, y) -> Just (x, y-1)
+                    Just (x, y) -> Just (x, max 0 (y-1))
                     Nothing -> Just (0, 0)
-            loop newActiveCellCoords
+            loop newActiveCellCoords ((Row $ "up, " ++ show(fmap snd newActiveCellCoords)):debugRows)
           "\ESC[B" -> do -- down
             let newActiveCellCoords =
                   case activeCellCoords of
-                    Just (x, y) -> Just (x, y+1)
+                    Just (x, y) -> Just (x, min (rowCount-1) (y+1))
                     Nothing -> Just (0, 0)
-            loop newActiveCellCoords
+            loop newActiveCellCoords ((Row $ "down, " ++ show(fmap snd newActiveCellCoords)):debugRows)
           "\n" -> do -- enter
             return ()
           "q" -> return ()
