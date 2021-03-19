@@ -4,8 +4,10 @@ import System.IO (stdin, hSetEcho, hSetBuffering, hReady, BufferMode (NoBufferin
 import ViewUtils (clearScreen, showInRectangle, showInGrid)
 import Control.Monad (when)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
-import Control.Monad.STM (atomically, retry)
+import Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, takeTMVar, putTMVar)
+import Control.Monad.STM (STM, atomically, retry)
 import Control.Concurrent (forkIO)
+import Control.Exception (bracket)
 
 data RowData = Row { smth :: String } deriving Eq
 
@@ -22,6 +24,22 @@ data AppStateData = AppState
   , highlightedRowIndex :: TVar (Maybe Int)
   , debugMessages :: TVar [RowData] }
 
+newLock :: IO (TMVar ())
+newLock = newEmptyTMVarIO
+
+lock :: TMVar () -> STM ()
+lock v = putTMVar v ()
+
+unlock :: TMVar () -> STM ()
+unlock v = takeTMVar v
+
+bracketInLock :: TMVar () -> IO () -> IO ()
+bracketInLock l action =
+  bracket
+    (atomically $ lock l)
+    (\_ -> atomically $ unlock l)
+    $ \_ -> action
+
 main :: IO ()
 main = do
   hSetBuffering stdin NoBuffering
@@ -31,16 +49,18 @@ main = do
     debugMessages <- newTVar ([] :: [RowData])
     highlightedRowIndex <- newTVar Nothing
     return $ AppState mainRows highlightedRowIndex debugMessages
+  redrawLock <- newLock
   forkIO $ do
     let loop rows activeCellY = do
           let activeCellCoords = fmap (\y -> (0, y)) activeCellY
-          showInGrid
-            xUpperLeft
-            yUpperLeft
-            columnCount
-            columnWidth
-            activeCellCoords
-            (map (\row -> [smth row]) rows)
+          bracketInLock redrawLock
+            $ showInGrid
+                xUpperLeft
+                yUpperLeft
+                columnCount
+                columnWidth
+                activeCellCoords
+                (map (\row -> [smth row]) rows)
           (newMainRows, newActiveCellY) <- atomically $ do
             newMainRows <- readTVar mainRowsTV
             newActiveCellY <- readTVar highlightedRowIndexTV
@@ -55,13 +75,14 @@ main = do
     loop mainRows activeCellY
   forkIO $ do
     let loop debugMessages = do
-          showInGrid
-            xUpperLeft
-            (yUpperLeft+12)
-            columnCount
-            columnWidth
-            Nothing
-            (map (\row -> [smth row]) debugMessages)
+          bracketInLock redrawLock
+            $ showInGrid
+                xUpperLeft
+                (yUpperLeft+12)
+                columnCount
+                columnWidth
+                Nothing
+                (map (\row -> [smth row]) debugMessages)
           newDebugMessages <- atomically $ do
             newDebugMessages <- readTVar debugMessagesTV
             if newDebugMessages == debugMessages
@@ -71,7 +92,7 @@ main = do
     debugMessages <- atomically $ readTVar debugMessagesTV
     loop debugMessages
       
-  clearScreen
+  bracketInLock redrawLock clearScreen
   keepListeningToKeyPresses mainRowsTV highlightedRowIndexTV debugMessagesTV
   where
     xUpperLeft = 0
