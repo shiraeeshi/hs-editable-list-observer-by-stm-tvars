@@ -26,32 +26,11 @@ showInRectangle xPos yPos width rows = do
   putStr bottomStr
   restoreCursor
 
-
-
 showInGrid :: Int -> Int -> Int -> Int -> Maybe (Int, Int) -> [[String]] -> IO ()
 showInGrid xUpperLeft yUpperLeft columnCount columnWidth activeCellCoords cellsData = do
   let
     x0 = xUpperLeft
     y0 = yUpperLeft
-    highlightCurrentColumn (activeCellX, activeCellY) = do
-      let
-        yPos = yUpperLeft
-        xPosLeft = xUpperLeft + (columnWidth+1)*activeCellX
-        xPosRight = xPosLeft + 1 + columnWidth
-        leftUpperCorner = if activeCellX == 0 then "┏" else "┲"
-        leftBottomCorner = if activeCellX == 0 then "┡" else "╄"
-        rightUpperCorner = if activeCellX == (columnCount-1) then "┓" else "┱"
-        rightBottomCorner = if activeCellX == (columnCount-1) then "┩" else "╃"
-        topStr = leftUpperCorner ++ (replicate columnWidth '━') ++ rightUpperCorner
-        bottomStr = leftBottomCorner ++ (replicate columnWidth '━') ++ rightBottomCorner
-      setCursorPosition yPos xPosLeft
-      putStr topStr
-      setCursorPosition (yPos+2) xPosLeft
-      putStr bottomStr
-      setCursorPosition (yPos+1) xPosLeft
-      putStr "┃"
-      setCursorPosition (yPos+1) xPosRight
-      putStr "┃"
     printRowValues row rowIndex = do
       let
         yPos = yUpperLeft+1+rowIndex*2
@@ -60,7 +39,7 @@ showInGrid xUpperLeft yUpperLeft columnCount columnWidth activeCellCoords cellsD
         putStr cellValue
   saveCursor
   drawGrid xUpperLeft yUpperLeft columnWidth columnCount (length cellsData)
-  forM_ activeCellCoords highlightCurrentColumn
+  forM_ activeCellCoords $ highlightCell xUpperLeft yUpperLeft columnCount columnWidth
   forM_ (cellsData `zip` [0..]) $ \(row, rowIndex) -> do
     printRowValues row rowIndex
   restoreCursor
@@ -92,3 +71,23 @@ drawGrid xUpperLeft yUpperLeft columnWidth columnCount rowCount = do
   setCursorPosition (yUpperLeft+rowCount*2) xUpperLeft
   putStr bottomStr
   restoreCursor
+
+highlightCell xUpperLeft yUpperLeft columnCount columnWidth (activeCellX, activeCellY) = do
+  let
+    yPos = yUpperLeft
+    xPosLeft = xUpperLeft + (columnWidth+1)*activeCellX
+    xPosRight = xPosLeft + 1 + columnWidth
+    leftUpperCorner = if activeCellX == 0 then "┏" else "┲"
+    leftBottomCorner = if activeCellX == 0 then "┡" else "╄"
+    rightUpperCorner = if activeCellX == (columnCount-1) then "┓" else "┱"
+    rightBottomCorner = if activeCellX == (columnCount-1) then "┩" else "╃"
+    topStr = leftUpperCorner ++ (replicate columnWidth '━') ++ rightUpperCorner
+    bottomStr = leftBottomCorner ++ (replicate columnWidth '━') ++ rightBottomCorner
+  setCursorPosition yPos xPosLeft
+  putStr topStr
+  setCursorPosition (yPos+2) xPosLeft
+  putStr bottomStr
+  setCursorPosition (yPos+1) xPosLeft
+  putStr "┃"
+  setCursorPosition (yPos+1) xPosRight
+  putStr "┃"
