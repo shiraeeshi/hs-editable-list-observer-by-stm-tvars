@@ -29,8 +29,8 @@ main = do
     loop activeCellCoords debugRows = do
       clearScreen
       showInGrid
-        (xUpperLeft+16)
-        yUpperLeft
+        xUpperLeft
+        (yUpperLeft+12)
         columnCount
         columnWidth
         Nothing
@@ -50,13 +50,17 @@ main = do
                   case activeCellCoords of
                     Just (x, y) -> Just (x, max 0 (y-1))
                     Nothing -> Just (0, 0)
-            loop newActiveCellCoords ((Row $ "up, " ++ show(fmap snd newActiveCellCoords)):debugRows)
+                debugRow = Row $ "up, " ++ show(fmap snd newActiveCellCoords)
+                newDebugRows = take 5 (debugRow:debugRows)
+            loop newActiveCellCoords newDebugRows
           "\ESC[B" -> do -- down
             let newActiveCellCoords =
                   case activeCellCoords of
                     Just (x, y) -> Just (x, min (rowCount-1) (y+1))
                     Nothing -> Just (0, 0)
-            loop newActiveCellCoords ((Row $ "down, " ++ show(fmap snd newActiveCellCoords)):debugRows)
+                debugRow = Row $ "down, " ++ show(fmap snd newActiveCellCoords)
+                newDebugRows = take 5 (debugRow:debugRows)
+            loop newActiveCellCoords newDebugRows
           "\n" -> do -- enter
             return ()
           "q" -> return ()
