@@ -2,9 +2,11 @@ module ViewUtils
  ( showInRectangle
  , showInGrid
  , clearScreen
+ , drawGrid
+ , highlightCell
  ) where
 
-import Control.Monad (forM_)
+import Control.Monad (when, forM_)
 import System.Console.ANSI
 import Data.List (intercalate)
 
@@ -38,7 +40,7 @@ showInGrid xUpperLeft yUpperLeft columnCount columnWidth activeCellCoords cellsD
         yPos = yUpperLeft+1+rowIndex*2
       forM_ (row `zip` [0..]) $ \(cellValue, cellIndex) -> do
         setCursorPosition yPos (xUpperLeft + 1 + (columnWidth+1)*cellIndex)
-        putStr cellValue
+        putStr (take columnWidth (cellValue ++ (repeat ' ')))
   saveCursor
   drawGrid xUpperLeft yUpperLeft columnWidth columnCount rowCount
   forM_ activeCellCoords $ highlightCell xUpperLeft yUpperLeft columnWidth columnCount rowCount
@@ -52,19 +54,16 @@ drawGrid xUpperLeft yUpperLeft columnWidth columnCount rowCount = do
     x0 = xUpperLeft
     y0 = yUpperLeft
     topStr         = "┌" ++ (intercalate "┬" (replicate columnCount (replicate columnWidth '─'))) ++ "┐"
-    rowBoxStr      = "│" ++ (intercalate "│" (replicate columnCount (replicate columnWidth ' '))) ++ "│"
     betweenRowsStr = "├" ++ (intercalate "┼" (replicate columnCount (replicate columnWidth '─'))) ++ "┤"
     bottomStr      = "└" ++ (intercalate "┴" (replicate columnCount (replicate columnWidth '─'))) ++ "┘"
     printRowBox rowIndex = do
-      if rowIndex == 0
-        then do
-          setCursorPosition (y0+1) x0
-          putStr rowBoxStr
-        else do
-          setCursorPosition (y0+rowIndex*2) x0
-          putStr betweenRowsStr
-          setCursorPosition (y0+rowIndex*2+1) x0
-          putStr rowBoxStr
+      when (rowIndex /= 0) $ do
+        setCursorPosition (y0+rowIndex*2) x0
+        putStr betweenRowsStr
+      let yPos = y0 + rowIndex*2 + 1
+      forM_ [x0,(x0+columnWidth+1)..(x0+(columnWidth+1)*columnCount)] $ \x -> do
+        setCursorPosition yPos x
+        putStr "│"
   saveCursor
   setCursorPosition yUpperLeft xUpperLeft
   putStr topStr
@@ -100,6 +99,7 @@ highlightCell xUpperLeft yUpperLeft columnWidth columnCount rowCount (activeCell
                             if activeCellY == rowCount - 1 then "┹" else "╃"
     topStr = leftUpperCorner ++ (replicate columnWidth '━') ++ rightUpperCorner
     bottomStr = leftBottomCorner ++ (replicate columnWidth '━') ++ rightBottomCorner
+  saveCursor
   setCursorPosition yPos xPosLeft
   putStr topStr
   setCursorPosition (yPos+2) xPosLeft
@@ -108,3 +108,4 @@ highlightCell xUpperLeft yUpperLeft columnWidth columnCount rowCount (activeCell
   putStr "┃"
   setCursorPosition (yPos+1) xPosRight
   putStr "┃"
+  restoreCursor

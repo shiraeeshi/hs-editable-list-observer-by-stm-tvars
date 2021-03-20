@@ -1,7 +1,7 @@
 module Main where
 
 import System.IO (stdin, hSetEcho, hSetBuffering, hReady, BufferMode (NoBuffering) )
-import ViewUtils (clearScreen, showInRectangle, showInGrid)
+import ViewUtils (clearScreen, showInRectangle, showInGrid, drawGrid, highlightCell)
 import Control.Monad (when)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, takeMVar, putMVar)
@@ -51,8 +51,8 @@ main = do
     return $ AppState mainRows highlightedRowIndex debugMessages
   redrawLock <- newLock
   forkIO $ do
-    let loop rows activeCellY = do
-          let activeCellCoords = fmap (\y -> (0, y)) activeCellY
+    let loop rows = do
+          let activeCellCoords = Nothing
           bracketInLock redrawLock
             $ showInGrid
                 xUpperLeft
@@ -61,18 +61,33 @@ main = do
                 columnWidth
                 activeCellCoords
                 (map (\row -> [smth row]) rows)
-          (newMainRows, newActiveCellY) <- atomically $ do
+          newMainRows <- atomically $ do
             newMainRows <- readTVar mainRowsTV
-            newActiveCellY <- readTVar highlightedRowIndexTV
-            if newMainRows == rows && newActiveCellY == activeCellY
+            if newMainRows == rows
               then retry
-              else return (newMainRows, newActiveCellY)
-          loop newMainRows newActiveCellY
-    (mainRows, activeCellY) <- atomically $ do
+              else return newMainRows
+          loop newMainRows
+    mainRows <- atomically $ do
       rows <- readTVar mainRowsTV
-      y <- readTVar highlightedRowIndexTV
-      return (rows, y)
-    loop mainRows activeCellY
+      return rows
+    loop mainRows
+  forkIO $ do
+    let loop activeCellY = do
+          let activeCellCoords = fmap (\y -> (0, y)) activeCellY
+          bracketInLock redrawLock
+            $ do
+                drawGrid xUpperLeft yUpperLeft columnWidth columnCount rowCount
+                case activeCellCoords of
+                  Nothing -> return ()
+                  Just coordsPair -> highlightCell xUpperLeft yUpperLeft columnWidth columnCount rowCount coordsPair
+          newActiveCellY <- atomically $ do
+            newActiveCellY <- readTVar highlightedRowIndexTV
+            if newActiveCellY == activeCellY
+              then retry
+              else return newActiveCellY
+          loop newActiveCellY
+    activeCellY <- atomically $ readTVar highlightedRowIndexTV
+    loop activeCellY
   forkIO $ do
     let loop debugMessages = do
           bracketInLock redrawLock
