@@ -1,13 +1,13 @@
 module Main where
 
 import System.IO (stdin, hSetEcho, hSetBuffering, hReady, BufferMode (NoBuffering) )
-import ViewUtils (clearScreen, showInRectangle, showInGrid, drawGrid, highlightCell)
+import ViewUtils (clearScreen, showInRectangle, clearRectangle, showInGrid, drawGrid, highlightCell)
 import Control.Monad (when)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, takeMVar, putMVar)
-import Control.Monad.STM (STM, atomically, retry)
+import Control.Monad.STM (STM, atomically, retry, throwSTM)
 import Control.Concurrent (forkIO)
-import Control.Exception (bracket)
+import Control.Exception (Exception, ErrorCall(ErrorCall), bracket, try)
 
 data RowData = Row { smth :: String } deriving Eq
 
@@ -22,7 +22,8 @@ initialRows = [
 data AppStateData = AppState
   { mainRows :: TVar [RowData]
   , highlightedRowIndex :: TVar (Maybe Int)
-  , debugMessages :: TVar [RowData] }
+  , debugMessages :: TVar [RowData]
+  , redrawLock :: MVar () }
 
 newLock :: IO (MVar ())
 newLock = newEmptyMVar
@@ -44,12 +45,12 @@ main :: IO ()
 main = do
   hSetBuffering stdin NoBuffering
   hSetEcho stdin False
-  (AppState mainRowsTV highlightedRowIndexTV debugMessagesTV) <- atomically $ do
-    mainRows <- newTVar initialRows
-    debugMessages <- newTVar ([] :: [RowData])
-    highlightedRowIndex <- newTVar Nothing
-    return $ AppState mainRows highlightedRowIndex debugMessages
-  redrawLock <- newLock
+  state@(AppState mainRowsTV highlightedRowIndexTV debugMessagesTV redrawLock) <- do
+    mainRows            <- atomically $ newTVar initialRows
+    debugMessages       <- atomically $ newTVar ([] :: [RowData])
+    highlightedRowIndex <- atomically $ newTVar Nothing
+    redrawLock <- newLock
+    return $ AppState mainRows highlightedRowIndex debugMessages redrawLock
   forkIO $ do
     let loop rows = do
           let activeCellCoords = Nothing
@@ -108,14 +109,42 @@ main = do
     loop debugMessages
       
   bracketInLock redrawLock clearScreen
-  keepListeningToKeyPresses mainRowsTV highlightedRowIndexTV debugMessagesTV
+  keepListeningToKeyPresses state
   where
     xUpperLeft = 0
     yUpperLeft = 0
     columnCount = 1
     columnWidth = 14
     rowCount = length initialRows
-    keepListeningToKeyPresses mainRowsTV highlightedRowIndexTV debugMessagesTV = do
+    showEditField appState@(AppState mainRowsTV highlightedRowIndexTV _debugMessagesTV redrawLock) value = do
+      let
+        txt = "edit cell value:"
+        lentxt = length txt
+        yPos = 0
+        xPos = (columnCount * (columnWidth + 1)) + 3
+        replaceNth lst idx val = if idx < 1 then val:(tail lst) else (head lst) : (replaceNth (tail lst) (idx - 1) val)
+      showInRectangle xPos yPos lentxt [txt, value]
+      key <- getKey
+      case key of
+        "\n" -> do
+          atomically $ do
+            maybeCellIndex <- readTVar highlightedRowIndexTV
+            rows <- readTVar mainRowsTV
+            case maybeCellIndex of
+              Nothing -> return ()
+              Just cellIndex -> writeTVar mainRowsTV $ replaceNth rows cellIndex (Row value)
+          bracketInLock redrawLock $ clearRectangle xPos yPos lentxt 2
+          keepListeningToKeyPresses appState
+        "\DEL" -> showEditField appState (if (length value) == 0 then value else init value)
+        c -> showEditField appState (value ++ c)
+    showErrorMsg appState msg = do
+      let
+        txt = "error: " ++ msg
+        lentxt = length txt
+        yPos = 0
+        xPos = (columnCount * (columnWidth + 1)) + 3
+      bracketInLock (redrawLock appState) $ showInRectangle xPos yPos lentxt [txt]
+    keepListeningToKeyPresses state@(AppState mainRowsTV highlightedRowIndexTV debugMessagesTV _redrawLock) = do
       key <- getKey
       when (key /= "\ESC") $ do
         case key of
@@ -131,7 +160,7 @@ main = do
                   newDebugRows = take 5 (debugRow:debugRows)
               writeTVar highlightedRowIndexTV newActiveCellY
               writeTVar debugMessagesTV newDebugRows
-            keepListeningToKeyPresses mainRowsTV highlightedRowIndexTV debugMessagesTV
+            keepListeningToKeyPresses state
           "\ESC[B" -> do -- down
             atomically $ do
               activeCellY <- readTVar highlightedRowIndexTV
@@ -144,9 +173,23 @@ main = do
                   newDebugRows = take 5 (debugRow:debugRows)
               writeTVar highlightedRowIndexTV newActiveCellY
               writeTVar debugMessagesTV newDebugRows
-            keepListeningToKeyPresses mainRowsTV highlightedRowIndexTV debugMessagesTV
+            keepListeningToKeyPresses state
           "\n" -> do -- enter
-            return ()
+            --eitherValue <- try $ atomically $ do
+            eitherValue <- (try :: IO String -> IO (Either ErrorCall String)) $ atomically $ do
+              maybeCellIndex <- readTVar highlightedRowIndexTV
+              rows <- readTVar mainRowsTV
+              case maybeCellIndex of
+                Nothing -> throwSTM (ErrorCall "there's no selected cell")
+                Just cellIndex -> do
+                  if cellIndex < 0 || cellIndex >= (length rows)
+                    then throwSTM (ErrorCall $ "index out of bounds: " ++ (show cellIndex))
+                    else return $ smth $ rows !! cellIndex
+            case eitherValue of
+              Left e -> do
+                showErrorMsg state (show e)
+                keepListeningToKeyPresses state
+              Right v -> showEditField state v
           "q" -> return ()
           _ -> return ()
 
