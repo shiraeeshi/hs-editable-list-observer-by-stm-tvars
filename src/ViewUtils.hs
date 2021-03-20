@@ -1,5 +1,6 @@
 module ViewUtils
  ( showInRectangle
+ , clearRectangle
  , showInGrid
  , clearScreen
  , drawGrid
@@ -27,6 +28,15 @@ showInRectangle xPos yPos width rows = do
     putStr row
   setCursorPosition (yPos + (length rows) + 1) xPos
   putStr bottomStr
+  restoreCursor
+
+clearRectangle :: Int -> Int -> Int -> Int -> IO ()
+clearRectangle xPos yPos width rowsCount = do
+  let emptyStr = replicate (width + 2) ' '
+  saveCursor
+  forM_ [0..(rowsCount+1)] $ \y -> do
+    setCursorPosition (yPos + y) xPos
+    putStr emptyStr
   restoreCursor
 
 showInGrid :: Int -> Int -> Int -> Int -> Maybe (Int, Int) -> [[String]] -> IO ()
