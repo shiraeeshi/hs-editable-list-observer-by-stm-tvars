@@ -53,7 +53,8 @@ main = do
     return $ AppState mainRows highlightedRowIndex debugMessages redrawLock
   forkIO $ do
     let loop rows = do
-          let activeCellCoords = Nothing
+          activeCellY <- atomically $ readTVar highlightedRowIndexTV
+          let activeCellCoords = fmap (\y -> (0, y)) activeCellY
           bracketInLock redrawLock
             $ showInGrid
                 xUpperLeft
