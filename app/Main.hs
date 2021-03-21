@@ -144,13 +144,6 @@ main = do
           keepListeningToKeyPresses appState
         "\DEL" -> showEditField appState (if (length value) == 0 then value else init value)
         c -> showEditField appState (value ++ c)
-    showErrorMsg appState msg = do
-      let
-        txt = "error: " ++ msg
-        lentxt = length txt
-        yPos = 0
-        xPos = (columnCount * (columnWidth + 1)) + 3
-      bracketInLock (redrawLock appState) $ showInRectangle xPos yPos lentxt [txt]
     keepListeningToKeyPresses state@(AppState mainRowsTV highlightedRowIndexTV debugMessagesTV _redrawLock) = do
       key <- getKey
       when (key /= "\ESC") $ do
@@ -194,7 +187,10 @@ main = do
                     else return $ smth $ rows !! cellIndex
             case eitherValue of
               Left e -> do
-                showErrorMsg state (show e)
+                atomically $ do
+                  debugMessages <- readTVar debugMessagesTV
+                  let msg = "error: " ++ (show e)
+                  writeTVar debugMessagesTV $ take debugLinesCount (msg:debugMessages)
                 keepListeningToKeyPresses state
               Right v -> showEditField state v
           "q" -> return ()
