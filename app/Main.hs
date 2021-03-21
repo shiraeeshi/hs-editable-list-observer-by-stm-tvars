@@ -63,6 +63,10 @@ main = do
                 columnWidth
                 activeCellCoords
                 (map (\row -> [smth row]) rows)
+          atomically $ do
+            debugMessages <- readTVar debugMessagesTV
+            let msg = "main rows listener: updated view"
+            writeTVar debugMessagesTV $ take debugLinesCount (msg:debugMessages)
           newMainRows <- atomically $ do
             newMainRows <- readTVar mainRowsTV
             if newMainRows == rows
@@ -82,6 +86,10 @@ main = do
                 case activeCellCoords of
                   Nothing -> return ()
                   Just coordsPair -> highlightCell xUpperLeft yUpperLeft columnWidth columnCount rowCount coordsPair
+          atomically $ do
+            debugMessages <- readTVar debugMessagesTV
+            let msg = "selected cell listener: updated highlighted cell"
+            writeTVar debugMessagesTV $ take debugLinesCount (msg:debugMessages)
           newActiveCellY <- atomically $ do
             newActiveCellY <- readTVar highlightedRowIndexTV
             if newActiveCellY == activeCellY
