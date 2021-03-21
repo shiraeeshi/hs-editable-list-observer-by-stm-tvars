@@ -1,7 +1,7 @@
 module Main where
 
 import System.IO (stdin, hSetEcho, hSetBuffering, hReady, BufferMode (NoBuffering) )
-import ViewUtils (clearScreen, showInRectangle, clearRectangle, showInGrid, drawGrid, highlightCell)
+import ViewUtils (clearScreen, showInRectangle, clearRectangle, showInGrid, drawGrid, highlightCell, printFromBottom)
 import Control.Monad (when)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, takeMVar, putMVar)
@@ -22,7 +22,7 @@ initialRows = [
 data AppStateData = AppState
   { mainRows :: TVar [RowData]
   , highlightedRowIndex :: TVar (Maybe Int)
-  , debugMessages :: TVar [RowData]
+  , debugMessages :: TVar [String]
   , redrawLock :: MVar () }
 
 newLock :: IO (MVar ())
@@ -47,7 +47,7 @@ main = do
   hSetEcho stdin False
   state@(AppState mainRowsTV highlightedRowIndexTV debugMessagesTV redrawLock) <- do
     mainRows            <- atomically $ newTVar initialRows
-    debugMessages       <- atomically $ newTVar ([] :: [RowData])
+    debugMessages       <- atomically $ newTVar ([] :: [String])
     highlightedRowIndex <- atomically $ newTVar Nothing
     redrawLock <- newLock
     return $ AppState mainRows highlightedRowIndex debugMessages redrawLock
@@ -93,13 +93,10 @@ main = do
   forkIO $ do
     let loop debugMessages = do
           bracketInLock redrawLock
-            $ showInGrid
+            $ printFromBottom
                 xUpperLeft
-                (yUpperLeft+12)
-                columnCount
-                columnWidth
-                Nothing
-                (map (\row -> [smth row]) debugMessages)
+                (yUpperLeft+12+debugLinesCount)
+                debugMessages
           newDebugMessages <- atomically $ do
             newDebugMessages <- readTVar debugMessagesTV
             if newDebugMessages == debugMessages
@@ -117,6 +114,7 @@ main = do
     columnCount = 1
     columnWidth = 14
     rowCount = length initialRows
+    debugLinesCount = 20
     showEditField appState@(AppState mainRowsTV highlightedRowIndexTV _debugMessagesTV redrawLock) value = do
       let
         txt = "edit cell value:"
@@ -157,8 +155,8 @@ main = do
                     case activeCellY of
                       Just y -> Just $ max 0 (y-1)
                       Nothing -> Just 0
-                  debugRow = Row $ "up, " ++ show(newActiveCellY)
-                  newDebugRows = take 5 (debugRow:debugRows)
+                  debugRow = "up, " ++ show(newActiveCellY)
+                  newDebugRows = take debugLinesCount (debugRow:debugRows)
               writeTVar highlightedRowIndexTV newActiveCellY
               writeTVar debugMessagesTV newDebugRows
             keepListeningToKeyPresses state
@@ -170,8 +168,8 @@ main = do
                     case activeCellY of
                       Just y -> Just $ min (rowCount-1) (y+1)
                       Nothing -> Just 0
-                  debugRow = Row $ "down, " ++ show(newActiveCellY)
-                  newDebugRows = take 5 (debugRow:debugRows)
+                  debugRow = "down, " ++ show(newActiveCellY)
+                  newDebugRows = take debugLinesCount (debugRow:debugRows)
               writeTVar highlightedRowIndexTV newActiveCellY
               writeTVar debugMessagesTV newDebugRows
             keepListeningToKeyPresses state
