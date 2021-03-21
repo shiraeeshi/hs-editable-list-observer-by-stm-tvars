@@ -5,6 +5,7 @@ module ViewUtils
  , clearScreen
  , drawGrid
  , highlightCell
+ , printFromBottom
  ) where
 
 import Control.Monad (when, forM_)
@@ -37,6 +38,15 @@ clearRectangle xPos yPos width rowsCount = do
   forM_ [0..(rowsCount+1)] $ \y -> do
     setCursorPosition (yPos + y) xPos
     putStr emptyStr
+  restoreCursor
+
+printFromBottom :: Int -> Int -> [String] -> IO ()
+printFromBottom xLeftBottom yLeftBottom strs = do
+  saveCursor
+  forM_ (strs `zip` [0..]) $ \(str, idx) -> do
+    setCursorPosition (yLeftBottom - idx) xLeftBottom
+    clearLine
+    putStr str
   restoreCursor
 
 showInGrid :: Int -> Int -> Int -> Int -> Maybe (Int, Int) -> [[String]] -> IO ()
