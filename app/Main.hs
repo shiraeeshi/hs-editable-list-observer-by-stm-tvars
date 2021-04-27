@@ -1,6 +1,6 @@
 module Main where
 
-import System.IO (stdin, hSetEcho, hSetBuffering, hReady, BufferMode (NoBuffering) )
+import System.IO (stdin, stdout, hSetEcho, hSetBuffering, hReady, BufferMode (NoBuffering) )
 import ViewUtils (clearScreen, showInRectangle, clearRectangle, showInGrid, drawGrid, highlightCell, printFromBottom)
 import Control.Monad (when)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
@@ -44,6 +44,7 @@ bracketInLock l action =
 main :: IO ()
 main = do
   hSetBuffering stdin NoBuffering
+  hSetBuffering stdout NoBuffering
   hSetEcho stdin False
   state@(AppState mainRowsTV highlightedRowIndexTV debugMessagesTV redrawLock) <- do
     mainRows            <- atomically $ newTVar initialRows
